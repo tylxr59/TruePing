@@ -23,7 +23,6 @@ To install TruePing, just clone the repository (no required dependancies!):
 ```bash
 git clone https://github.com/tylxr59/TruePing.git
 cd TruePing
-pip install -r requirements.txt
 ```
 
 ## Usage
