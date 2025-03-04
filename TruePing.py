@@ -13,46 +13,72 @@ class Colors:
     CYAN = '\033[96m'
     RESET = '\033[0m'
 
+# Latency ranges for coloring
+class LatencyRanges:
+    GOOD = 50
+    MEH = 120
+
 latencies = []
+timeouts = 0
+
+def print_statistics():
+    if latencies:
+        avg_latency = sum(latencies) / len(latencies)
+        min_latency = min(latencies)
+        max_latency = max(latencies)
+        failed_percent = timeouts / len(latencies)
+        print(f"\n{Colors.PURPLE}Ping statistics for {host}:{Colors.RESET}")
+        print(f"     Packets: Sent = {len(latencies)}, Received = {len(latencies)-timeouts}, Lost = {timeouts} ({failed_percent:.2f}% loss),")
+        print(f"{Colors.PURPLE}Approximate round trip times in milli-seconds:{Colors.RESET}")
+        print(f"     Minimum = {min_latency:.2f}ms, Maximum = {max_latency:.2f}ms, Average = {avg_latency:.2f}ms")
+
 
 def test_latency(host, port, interval, timeout, retries):
+    global timeouts
+    test_count = 0
     while True:
         start_time = time.time()
         attempt = 0
+
         while attempt < retries or retries == 0:
             try:
                 sock = socket.create_connection((host, port), timeout=timeout)
                 sock.close()
-                latency = (time.time() - start_time) * 1000  # Convert to milliseconds
+                latency = (time.time() - start_time) * 1000
                 latencies.append(latency)
-                print(f"{Colors.GREEN}Latency to {host}:{port} is {latency:.2f} ms{Colors.RESET}")
+                test_count += 1
+
+                if latency < LatencyRanges.GOOD:
+                    print(f"{Colors.GREEN}Latency to {host}:{port} is {latency:.2f} ms{Colors.RESET}")
+                elif LatencyRanges.GOOD < latency < LatencyRanges.MEH:
+                    print(f"{Colors.YELLOW}Latency to {host}:{port} is {latency:.2f} ms{Colors.RESET}")
+                else:
+                    print(f"{Colors.RED}Latency to {host}:{port} is {latency:.2f} ms{Colors.RESET}")
                 break
             except socket.timeout:
                 if retries == 0:
-                    print(f"{Colors.YELLOW}Connection to {host}:{port} timed out. Retrying in {interval} second(s)...{Colors.RESET}")
+                    print(f"{Colors.CYAN}Connection to {host}:{port} timed out. Retrying in {interval} second(s)...{Colors.RESET}")
+                    timeouts += 1
                 else:
-                    print(f"{Colors.YELLOW}Connection to {host}:{port} timed out (attempt {attempt + 1}/{retries}){Colors.RESET}")
+                    print(f"{Colors.CYAN}Connection to {host}:{port} timed out (attempt {attempt + 1}/{retries}){Colors.RESET}")
+                    timeouts += 1
             except socket.error as e:
                 if retries == 0:
                     print(f"{Colors.RED}Failed to connect to {host}:{port} - {e}. Retrying in {interval} second(s)...{Colors.RESET}")
                 else:
                     print(f"{Colors.RED}Failed to connect to {host}:{port} - {e} (attempt {attempt + 1}/{retries}){Colors.RESET}")
             attempt += 1
-            time.sleep(interval)  # Ensure the sleep interval is respected even on error
+            time.sleep(interval)
         if retries != 0 and attempt == retries:
             print(f"Maximum number of retries ({retries}) reached. Exiting...")
             break
+        if test_count == 30:
+            print_statistics()
+            test_count = 0
         time.sleep(interval)
 
 def signal_handler(sig, frame):
-    if latencies:
-        avg_latency = sum(latencies) / len(latencies)
-        min_latency = min(latencies)
-        max_latency = max(latencies)
-        print(f"\n{Colors.PURPLE}Ping statistics for {host}:{Colors.RESET}")
-        print(f"     Packets: Sent = {len(latencies)}, Received = {len(latencies)}, Lost = 0 (0% loss),")
-        print(f"{Colors.PURPLE}Approximate round trip times in milli-seconds:{Colors.RESET}")
-        print(f"     Minimum = {min_latency:.2f}ms, Maximum = {max_latency:.2f}ms, Average = {avg_latency:.2f}ms")
+    print_statistics()
     sys.exit(0)
 
 if __name__ == "__main__":
